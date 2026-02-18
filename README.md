@@ -18,7 +18,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
     <script>
         // 싱박게임 엔진 가동!
-        // 두쫀쿠 싱믄 님의 11개 이미지를 게임에 연결하는 핵심 로직입니다.
+        // singmeun 님의 11개 이미지를 게임에 연결하는 핵심 로직입니다.
         console.log("싱박게임 세팅 완료!");
     </script>
 </body>
