@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>싱박게임 - PC & 모바일 통합 🍉</title>
+    <title>싱박게임 - FINAL 🍉</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; touch-action: none; }
         #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 2px 2px white; pointer-events: none; }
@@ -29,14 +29,14 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
-        // 물리 환경 설정 (바닥 보강)
         const ground = Bodies.rectangle(200, 650, 600, 100, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const leftWall = Bodies.rectangle(-45, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const rightWall = Bodies.rectangle(445, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
-        let nextFruitIndex = Math.floor(Math.random() * 4);
+        // [수정] 첫 번째 나올 과일을 무조건 0번(싱박01)으로 고정!
+        let nextFruitIndex = 0; 
         let currentFruit = null;
         let isInputActive = false;
 
@@ -78,7 +78,6 @@
             return fruit;
         }
 
-        // 입력 처리 (마우스 & 터치 공용)
         function startInput(clientX) {
             if (isInputActive) return;
             const rect = render.canvas.getBoundingClientRect();
@@ -99,20 +98,19 @@
             if (isInputActive && currentFruit) {
                 isInputActive = false;
                 Body.setStatic(currentFruit, false);
-                score += 10; // 투하 시 10점 상승
+                score += 10;
                 document.getElementById("score").innerText = score;
                 currentFruit = null;
-                nextFruitIndex = Math.floor(Math.random() * 4);
+                // [수정] 첫 시도 이후부터는 0~3번(싱박01~04) 중에서 랜덤하게 나옵니다.
+                nextFruitIndex = Math.floor(Math.random() * 4); 
                 updateNextPreview();
             }
         }
 
-        // 마우스 리스너
         window.addEventListener("mousedown", (e) => startInput(e.clientX));
         window.addEventListener("mousemove", (e) => moveInput(e.clientX));
         window.addEventListener("mouseup", endInput);
 
-        // 터치 리스너
         window.addEventListener("touchstart", (e) => {
             e.preventDefault();
             startInput(e.touches[0].clientX);
@@ -123,7 +121,6 @@
         }, { passive: false });
         window.addEventListener("touchend", endInput);
 
-        // 합치기 판정
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
@@ -135,7 +132,7 @@
                     if (Composite.allBodies(engine.world).includes(bodyA) && Composite.allBodies(engine.world).includes(bodyB)) {
                         Composite.remove(engine.world, [bodyA, bodyB]);
                         addFruit(newX, newY, index + 1, false);
-                        score += (index + 1) * 20; // 합치기 보너스 점수
+                        score += (index + 1) * 20;
                         document.getElementById("score").innerText = score;
                     }
                 }
