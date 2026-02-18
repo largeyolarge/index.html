@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>싱박게임 - 바닥 보강 버전 🍉</title>
+    <title>싱박게임 - FINAL 🍉</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; }
         #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 1px 1px white; pointer-events: none; }
@@ -29,10 +29,10 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
-        // --- 튼튼한 바닥과 벽 생성 (두께를 100으로 키워서 뚫림 방지) ---
+        // 튼튼한 바닥과 벽
         const ground = Bodies.rectangle(200, 650, 600, 100, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
-        const leftWall = Bodies.rectangle(-50, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
-        const rightWall = Bodies.rectangle(450, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
+        const leftWall = Bodies.rectangle(-45, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
+        const rightWall = Bodies.rectangle(445, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
@@ -74,10 +74,16 @@
         function addFruit(x, y, index, isStatic = false) {
             if (index >= 11) return null;
             const radius = FRUITS[index].r;
+
+            // [추가] 점수 로직: 설치 시 1점, 합쳐져서 생성 시 보너스 점수
+            if (!isStatic) score += Math.floor(FRUITS[index].score / 2);
+            else score += 1;
+            document.getElementById("score").innerText = score;
+
             const fruit = Bodies.circle(x, y, radius, {
                 index: index,
                 isStatic: isStatic,
-                restitution: 0.2, // 튕김 살짝 줄임
+                restitution: 0.2,
                 friction: 0.1,
                 render: { sprite: { texture: '' } } 
             });
@@ -86,13 +92,11 @@
             return fruit;
         }
 
-        // 조준 제어
         window.addEventListener("mousedown", (e) => {
             if (isMouseDown) return;
             const rect = render.canvas.getBoundingClientRect();
             const x = Math.max(30, Math.min(370, e.clientX - rect.left));
-            if (x < 0 || x > 400) return; // 캔버스 밖 클릭 무시
-            
+            if (x < 0 || x > 400) return;
             isMouseDown = true;
             currentFruit = addFruit(x, 50, nextFruitIndex, true);
         });
@@ -115,7 +119,6 @@
             }
         });
 
-        // 합치기
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
@@ -127,7 +130,7 @@
                     if (Composite.allBodies(engine.world).includes(bodyA) && Composite.allBodies(engine.world).includes(bodyB)) {
                         Composite.remove(engine.world, [bodyA, bodyB]);
                         addFruit(newX, newY, index + 1, false);
-                        score += FRUITS[index].score;
+                        score += FRUITS[index].score; // 합치기 보너스 점수
                         document.getElementById("score").innerText = score;
                     }
                 }
