@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>싱박게임 - NEXT 기능 추가 🍉</title>
+    <title>싱박게임 - 드래그 조준 버전 🍉</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; }
-        #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 1px 1px white; }
-        #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; }
+        #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 1px 1px white; pointer-events: none; }
+        #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; pointer-events: none; }
         #next-label { font-size: 14px; font-weight: bold; color: #ff4757; margin-bottom: 5px; }
         #next-preview { width: 60px; height: 60px; background-size: cover; background-position: center; border-radius: 50%; margin: 0 auto; }
     </style>
@@ -28,13 +28,16 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
+        // 벽 설정
         const ground = Bodies.rectangle(200, 590, 400, 20, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const leftWall = Bodies.rectangle(5, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const rightWall = Bodies.rectangle(395, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
-        let nextFruitIndex = Math.floor(Math.random() * 4); // 다음에 나올 과일 미리 결정
+        let nextFruitIndex = Math.floor(Math.random() * 4);
+        let currentFruit = null; // 조준 중인 과일
+        let isMouseDown = false;
 
         const FRUITS = [
             { r: 25, score: 2 }, { r: 35, score: 4 }, { r: 45, score: 8 }, 
@@ -45,28 +48,22 @@
 
         const textureCache = {};
 
-        // NEXT 미리보기 업데이트 함수
         function updateNextPreview() {
             const fileName = `싱박${(nextFruitIndex + 1).toString().padStart(2, '0')}.png`;
             document.getElementById('next-preview').style.backgroundImage = `url(${fileName})`;
         }
 
-        // 동그란 텍스처 생성 (버그 방지용 비동기 처리 개선)
         function getCircularTexture(index, radius, callback) {
             const fileName = `싱박${(index + 1).toString().padStart(2, '0')}.png`;
             if (textureCache[index]) return callback(textureCache[index]);
-
             const img = new Image();
             img.src = fileName;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const size = radius * 2;
-                canvas.width = size;
-                canvas.height = size;
+                canvas.width = size; canvas.height = size;
                 const ctx = canvas.getContext('2d');
-                ctx.beginPath();
-                ctx.arc(radius, radius, radius, 0, Math.PI * 2);
-                ctx.clip();
+                ctx.beginPath(); ctx.arc(radius, radius, radius, 0, Math.PI * 2); ctx.clip();
                 ctx.drawImage(img, 0, 0, size, size);
                 const dataUrl = canvas.toDataURL();
                 textureCache[index] = dataUrl;
@@ -74,51 +71,64 @@
             };
         }
 
-        function addFruit(x, y, index, isEvolution = false) {
-            if (index >= 11) return;
+        function addFruit(x, y, index, isStatic = false) {
+            if (index >= 11) return null;
             const radius = FRUITS[index].r;
-
             const fruit = Bodies.circle(x, y, radius, {
                 index: index,
+                isStatic: isStatic,
                 restitution: 0.3,
                 friction: 0.1,
+                collisionFilter: isStatic ? { group: -1, mask: 0 } : { group: 0 }, // 대기 중일 땐 충돌 무시
                 render: { sprite: { texture: '' } } 
             });
-
-            getCircularTexture(index, radius, (t) => {
-                fruit.render.sprite.texture = t;
-            });
-
+            getCircularTexture(index, radius, (t) => { fruit.render.sprite.texture = t; });
             Composite.add(engine.world, fruit);
+            return fruit;
         }
 
-        // 클릭 시 과일 투하
+        // --- 드래그 조준 로직 ---
         window.addEventListener("mousedown", (e) => {
+            if (isMouseDown) return;
+            isMouseDown = true;
             const rect = render.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            if (x > 10 && x < 390) {
-                addFruit(x, 50, nextFruitIndex); // 결정된 NEXT 과일 투하
-                nextFruitIndex = Math.floor(Math.random() * 4); // 새로운 NEXT 결정
+            const x = Math.max(30, Math.min(370, e.clientX - rect.left));
+            currentFruit = addFruit(x, 50, nextFruitIndex, true); // 정적(Static) 상태로 생성
+        });
+
+        window.addEventListener("mousemove", (e) => {
+            if (isMouseDown && currentFruit) {
+                const rect = render.canvas.getBoundingClientRect();
+                const x = Math.max(30, Math.min(370, e.clientX - rect.left));
+                Matter.Body.setPosition(currentFruit, { x: x, y: 50 });
+            }
+        });
+
+        window.addEventListener("mouseup", (e) => {
+            if (isMouseDown && currentFruit) {
+                isMouseDown = false;
+                // 물리 엔진 적용 (중력 받게 함)
+                Matter.Body.setStatic(currentFruit, false);
+                currentFruit.collisionFilter = { group: 0, mask: 0xFFFFFFFF };
+                
+                currentFruit = null;
+                nextFruitIndex = Math.floor(Math.random() * 4);
                 updateNextPreview();
             }
         });
 
-        // 합치기 로직 (중복 합치기 버그 수정)
+        // 합치기 로직
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
                 if (bodyA.index !== undefined && bodyA.index === bodyB.index) {
                     const index = bodyA.index;
                     if (index >= 10) return;
-
                     const newX = (bodyA.position.x + bodyB.position.x) / 2;
                     const newY = (bodyA.position.y + bodyB.position.y) / 2;
-
-                    // 동시에 여러 번 합쳐지는 버그 방지를 위해 존재 여부 확인 후 제거
-                    if (Composite.allBodies(engine.world).includes(bodyA) && 
-                        Composite.allBodies(engine.world).includes(bodyB)) {
+                    if (Composite.allBodies(engine.world).includes(bodyA) && Composite.allBodies(engine.world).includes(bodyB)) {
                         Composite.remove(engine.world, [bodyA, bodyB]);
-                        addFruit(newX, newY, index + 1, true);
+                        addFruit(newX, newY, index + 1, false);
                         score += FRUITS[index].score;
                         document.getElementById("score").innerText = score;
                     }
@@ -126,7 +136,7 @@
             });
         });
 
-        updateNextPreview(); // 초기 미리보기 실행
+        updateNextPreview();
         Render.run(render);
         Runner.run(Runner.create(), engine);
     </script>
