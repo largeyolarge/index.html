@@ -3,14 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>싱박게임 - 최종 진화형 🍉</title>
+    <title>싱박게임 - NEXT 기능 추가 🍉</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; }
-        #score { position: absolute; top: 20px; font-size: 40px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 2px 2px white; }
+        #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 1px 1px white; }
+        #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; }
+        #next-label { font-size: 14px; font-weight: bold; color: #ff4757; margin-bottom: 5px; }
+        #next-preview { width: 60px; height: 60px; background-size: cover; background-position: center; border-radius: 50%; margin: 0 auto; }
     </style>
 </head>
 <body>
     <div id="score">0</div>
+    <div id="next-container">
+        <div id="next-label">NEXT</div>
+        <div id="next-preview"></div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
     <script>
         const { Engine, Render, Runner, Bodies, Composite, Events } = Matter;
@@ -21,14 +28,14 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
-        // 벽 설정
         const ground = Bodies.rectangle(200, 590, 400, 20, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const leftWall = Bodies.rectangle(5, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const rightWall = Bodies.rectangle(395, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
-        // 과일 데이터 (반지름과 점수)
+        let nextFruitIndex = Math.floor(Math.random() * 4); // 다음에 나올 과일 미리 결정
+
         const FRUITS = [
             { r: 25, score: 2 }, { r: 35, score: 4 }, { r: 45, score: 8 }, 
             { r: 55, score: 16 }, { r: 70, score: 32 }, { r: 85, score: 64 }, 
@@ -36,93 +43,90 @@
             { r: 145, score: 1024 }, { r: 160, score: 2048 }
         ];
 
-        // 이미지 캐싱 및 동그랗게 깎는 함수
-        const circleTextureCache = {};
+        const textureCache = {};
 
-        function createCircleTexture(index, radius) {
+        // NEXT 미리보기 업데이트 함수
+        function updateNextPreview() {
+            const fileName = `싱박${(nextFruitIndex + 1).toString().padStart(2, '0')}.png`;
+            document.getElementById('next-preview').style.backgroundImage = `url(${fileName})`;
+        }
+
+        // 동그란 텍스처 생성 (버그 방지용 비동기 처리 개선)
+        function getCircularTexture(index, radius, callback) {
             const fileName = `싱박${(index + 1).toString().padStart(2, '0')}.png`;
-            const cacheKey = `${fileName}-${radius}`;
-            if (circleTextureCache[cacheKey]) return circleTextureCache[cacheKey];
-
-            const canvas = document.createElement('canvas');
-            const size = radius * 2;
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
+            if (textureCache[index]) return callback(textureCache[index]);
 
             const img = new Image();
             img.src = fileName;
             img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const size = radius * 2;
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
                 ctx.beginPath();
                 ctx.arc(radius, radius, radius, 0, Math.PI * 2);
                 ctx.clip();
-                // 이미지를 원형 캔버스에 꽉 채워서 그리기
                 ctx.drawImage(img, 0, 0, size, size);
-                circleTextureCache[cacheKey] = canvas.toDataURL();
+                const dataUrl = canvas.toDataURL();
+                textureCache[index] = dataUrl;
+                callback(dataUrl);
             };
-            return fileName; 
         }
 
-        function addFruit(x, y, index) {
+        function addFruit(x, y, index, isEvolution = false) {
             if (index >= 11) return;
             const radius = FRUITS[index].r;
-            
+
             const fruit = Bodies.circle(x, y, radius, {
                 index: index,
                 restitution: 0.3,
                 friction: 0.1,
-                render: {
-                    sprite: {
-                        texture: createCircleTexture(index, radius),
-                        // 텍스처가 로드되기 전 기본 설정을 위해 1:1 스케일 유지
-                        xScale: 1,
-                        yScale: 1
-                    }
-                }
+                render: { sprite: { texture: '' } } 
             });
 
-            // 이미지가 로드된 후 텍스처를 동그란 버전으로 교체하는 루틴
-            const checkLoad = setInterval(() => {
-                const fileName = `싱박${(index + 1).toString().padStart(2, '0')}.png`;
-                const cacheKey = `${fileName}-${radius}`;
-                if (circleTextureCache[cacheKey]) {
-                    fruit.render.sprite.texture = circleTextureCache[cacheKey];
-                    clearInterval(checkLoad);
-                }
-            }, 100);
+            getCircularTexture(index, radius, (t) => {
+                fruit.render.sprite.texture = t;
+            });
 
             Composite.add(engine.world, fruit);
         }
 
-        // 클릭 이벤트: 0~3번(싱박01~04) 랜덤 생성
+        // 클릭 시 과일 투하
         window.addEventListener("mousedown", (e) => {
             const rect = render.canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
-            if (x > 0 && x < 400) {
-                const randomIndex = Math.floor(Math.random() * 4); 
-                addFruit(x, 50, randomIndex);
+            if (x > 10 && x < 390) {
+                addFruit(x, 50, nextFruitIndex); // 결정된 NEXT 과일 투하
+                nextFruitIndex = Math.floor(Math.random() * 4); // 새로운 NEXT 결정
+                updateNextPreview();
             }
         });
 
-        // 합치기 판정
+        // 합치기 로직 (중복 합치기 버그 수정)
         Events.on(engine, "collisionStart", (event) => {
-            event.pairs.forEach((collision) => {
-                if (collision.bodyA.index !== undefined && collision.bodyA.index === collision.bodyB.index) {
-                    const index = collision.bodyA.index;
+            event.pairs.forEach((pair) => {
+                const { bodyA, bodyB } = pair;
+                if (bodyA.index !== undefined && bodyA.index === bodyB.index) {
+                    const index = bodyA.index;
                     if (index >= 10) return;
 
-                    const newX = (collision.bodyA.position.x + collision.bodyB.position.x) / 2;
-                    const newY = (collision.bodyA.position.y + collision.bodyB.position.y) / 2;
+                    const newX = (bodyA.position.x + bodyB.position.x) / 2;
+                    const newY = (bodyA.position.y + bodyB.position.y) / 2;
 
-                    Composite.remove(engine.world, [collision.bodyA, collision.bodyB]);
-                    addFruit(newX, newY, index + 1);
-                    
-                    score += FRUITS[index].score;
-                    document.getElementById("score").innerText = score;
+                    // 동시에 여러 번 합쳐지는 버그 방지를 위해 존재 여부 확인 후 제거
+                    if (Composite.allBodies(engine.world).includes(bodyA) && 
+                        Composite.allBodies(engine.world).includes(bodyB)) {
+                        Composite.remove(engine.world, [bodyA, bodyB]);
+                        addFruit(newX, newY, index + 1, true);
+                        score += FRUITS[index].score;
+                        document.getElementById("score").innerText = score;
+                    }
                 }
             });
         });
 
+        updateNextPreview(); // 초기 미리보기 실행
         Render.run(render);
         Runner.run(Runner.create(), engine);
     </script>
