@@ -3,22 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>싱박게임 - FINAL 🍉</title>
+    <title>싱박게임 - 랭킹 & 게임오버 🍉</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; touch-action: none; }
-        #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 2px 2px white; pointer-events: none; }
+        
+        /* 점수판 디자인 */
+        #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; }
+        #score { font-size: 35px; font-weight: bold; color: #ff4757; text-shadow: 2px 2px white; }
+        #best-score { font-size: 18px; font-weight: bold; color: #ffa502; text-shadow: 1px 1px white; }
+        
+        /* NEXT 안내 */
         #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 8px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; pointer-events: none; }
         #next-label { font-size: 12px; font-weight: bold; color: #ff4757; margin-bottom: 3px; }
         #next-preview { width: 50px; height: 50px; background-size: cover; background-position: center; border-radius: 50%; margin: 0 auto; }
-        canvas { border: 4px solid #ffb7b7; border-radius: 10px; background-color: white; max-width: 95vw; max-height: 80vh; }
+        
+        canvas { border: 4px solid #ffb7b7; border-radius: 10px; background-color: white; max-width: 95vw; max-height: 85vh; }
+
+        /* 게임오버 화면 */
+        #game-over { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; color: white; }
+        #game-over h1 { font-size: 50px; margin-bottom: 10px; color: #ff4757; }
+        #game-over button { padding: 15px 30px; font-size: 20px; border-radius: 30px; border: none; background: #ff4757; color: white; cursor: pointer; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <div id="score">0</div>
+    <div id="ui-container">
+        <div id="score">0</div>
+        <div id="best-score">BEST: 0</div>
+    </div>
+    
     <div id="next-container">
         <div id="next-label">NEXT</div>
         <div id="next-preview"></div>
     </div>
+
+    <div id="game-over">
+        <h1>GAME OVER</h1>
+        <p id="final-score" style="font-size: 24px;">Score: 0</p>
+        <button onclick="location.reload()">다시 시작하기</button>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
     <script>
         const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
@@ -29,16 +52,25 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
+        // 물리 환경 설정
         const ground = Bodies.rectangle(200, 650, 600, 100, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const leftWall = Bodies.rectangle(-45, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const rightWall = Bodies.rectangle(445, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
+        
+        // 데드라인 (상단 선)
+        const deadLineY = 100;
+
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
-        // [수정] 첫 번째 나올 과일을 무조건 0번(싱박01)으로 고정!
-        let nextFruitIndex = 0; 
+        let bestScore = localStorage.getItem("singbak_best") || 0;
+        document.getElementById("best-score").innerText = `BEST: ${bestScore}`;
+        
+        let nextFruitIndex = 0; // 첫 과일 고정
+        let isFirstFruit = true;
         let currentFruit = null;
         let isInputActive = false;
+        let isGameOver = false;
 
         const FRUITS = [{ r: 25 }, { r: 35 }, { r: 45 }, { r: 55 }, { r: 70 }, { r: 85 }, { r: 100 }, { r: 115 }, { r: 130 }, { r: 145 }, { r: 160 }];
         const textureCache = {};
@@ -67,7 +99,7 @@
         }
 
         function addFruit(x, y, index, isStatic = false) {
-            if (index >= 11) return null;
+            if (index >= 11 || isGameOver) return null;
             const radius = FRUITS[index].r;
             const fruit = Bodies.circle(x, y, radius, {
                 index: index, isStatic: isStatic, restitution: 0.2, friction: 0.1,
@@ -78,8 +110,18 @@
             return fruit;
         }
 
+        function updateScore(amount) {
+            score += amount;
+            document.getElementById("score").innerText = score;
+            if (score > bestScore) {
+                bestScore = score;
+                localStorage.setItem("singbak_best", bestScore);
+                document.getElementById("best-score").innerText = `BEST: ${bestScore}`;
+            }
+        }
+
         function startInput(clientX) {
-            if (isInputActive) return;
+            if (isInputActive || isGameOver) return;
             const rect = render.canvas.getBoundingClientRect();
             const x = Math.max(30, Math.min(370, (clientX - rect.left) * (400 / rect.width)));
             isInputActive = true;
@@ -98,29 +140,22 @@
             if (isInputActive && currentFruit) {
                 isInputActive = false;
                 Body.setStatic(currentFruit, false);
-                score += 10;
-                document.getElementById("score").innerText = score;
+                updateScore(10);
                 currentFruit = null;
-                // [수정] 첫 시도 이후부터는 0~3번(싱박01~04) 중에서 랜덤하게 나옵니다.
-                nextFruitIndex = Math.floor(Math.random() * 4); 
+                nextFruitIndex = Math.floor(Math.random() * 4);
                 updateNextPreview();
             }
         }
 
+        // 입력 이벤트
         window.addEventListener("mousedown", (e) => startInput(e.clientX));
         window.addEventListener("mousemove", (e) => moveInput(e.clientX));
         window.addEventListener("mouseup", endInput);
-
-        window.addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            startInput(e.touches[0].clientX);
-        }, { passive: false });
-        window.addEventListener("touchmove", (e) => {
-            e.preventDefault();
-            moveInput(e.touches[0].clientX);
-        }, { passive: false });
+        window.addEventListener("touchstart", (e) => { e.preventDefault(); startInput(e.touches[0].clientX); }, { passive: false });
+        window.addEventListener("touchmove", (e) => { e.preventDefault(); moveInput(e.touches[0].clientX); }, { passive: false });
         window.addEventListener("touchend", endInput);
 
+        // 합치기 및 게임오버 체크
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
@@ -132,11 +167,41 @@
                     if (Composite.allBodies(engine.world).includes(bodyA) && Composite.allBodies(engine.world).includes(bodyB)) {
                         Composite.remove(engine.world, [bodyA, bodyB]);
                         addFruit(newX, newY, index + 1, false);
-                        score += (index + 1) * 20;
-                        document.getElementById("score").innerText = score;
+                        updateScore((index + 1) * 20);
                     }
                 }
             });
+        });
+
+        // 데드라인 실시간 체크 (게임오버 판정)
+        Events.on(engine, "afterUpdate", () => {
+            if (isGameOver) return;
+            Composite.allBodies(engine.world).forEach(body => {
+                if (body.isStatic || body.index === undefined) return;
+                
+                // 과일이 데드라인(y=100)보다 위로 올라오면 (y값이 작아지면)
+                if (body.position.y < deadLineY) {
+                    // 바로 끝내지 않고 잠시 여유를 주려면 속도가 0에 가까울 때 판정
+                    if (body.velocity.y < 0.1) {
+                        isGameOver = true;
+                        document.getElementById("game-over").style.display = "flex";
+                        document.getElementById("final-score").innerText = `Final Score: ${score}`;
+                    }
+                }
+            });
+        });
+
+        // 데드라인 시각화 (빨간 선 그리기)
+        Events.on(render, 'afterRender', () => {
+            const ctx = render.context;
+            ctx.beginPath();
+            ctx.moveTo(0, deadLineY);
+            ctx.lineTo(400, deadLineY);
+            ctx.strokeStyle = '#ff4757';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]); // 점선 효과
+            ctx.stroke();
+            ctx.setLineDash([]); // 대시 초기화
         });
 
         updateNextPreview();
