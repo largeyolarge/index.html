@@ -34,7 +34,7 @@
                 restitution: 0.5,
                 render: { 
                     sprite: { 
-                        texture: './1.png', // 올리신 사진 이름이 1.png인지 꼭 확인!
+                        texture: '1.png', // 올리신 사진 이름이 1.png인지 꼭 확인!
                         xScale: 0.1, 
                         yScale: 0.1 
                     } 
