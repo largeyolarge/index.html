@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>싱박게임 - 드래그 조준 버전 🍉</title>
+    <title>싱박게임 - 바닥 보강 버전 🍉</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; }
         #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 1px 1px white; pointer-events: none; }
         #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; pointer-events: none; }
         #next-label { font-size: 14px; font-weight: bold; color: #ff4757; margin-bottom: 5px; }
         #next-preview { width: 60px; height: 60px; background-size: cover; background-position: center; border-radius: 50%; margin: 0 auto; }
+        canvas { border: 4px solid #ffb7b7; border-radius: 10px; background-color: white; }
     </style>
 </head>
 <body>
@@ -20,7 +21,7 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Events } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
         const engine = Engine.create();
         const render = Render.create({
             element: document.body,
@@ -28,15 +29,15 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
-        // 벽 설정
-        const ground = Bodies.rectangle(200, 590, 400, 20, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
-        const leftWall = Bodies.rectangle(5, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
-        const rightWall = Bodies.rectangle(395, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
+        // --- 튼튼한 바닥과 벽 생성 (두께를 100으로 키워서 뚫림 방지) ---
+        const ground = Bodies.rectangle(200, 650, 600, 100, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
+        const leftWall = Bodies.rectangle(-50, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
+        const rightWall = Bodies.rectangle(450, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
         let nextFruitIndex = Math.floor(Math.random() * 4);
-        let currentFruit = null; // 조준 중인 과일
+        let currentFruit = null;
         let isMouseDown = false;
 
         const FRUITS = [
@@ -47,7 +48,6 @@
         ];
 
         const textureCache = {};
-
         function updateNextPreview() {
             const fileName = `싱박${(nextFruitIndex + 1).toString().padStart(2, '0')}.png`;
             document.getElementById('next-preview').style.backgroundImage = `url(${fileName})`;
@@ -77,9 +77,8 @@
             const fruit = Bodies.circle(x, y, radius, {
                 index: index,
                 isStatic: isStatic,
-                restitution: 0.3,
+                restitution: 0.2, // 튕김 살짝 줄임
                 friction: 0.1,
-                collisionFilter: isStatic ? { group: -1, mask: 0 } : { group: 0 }, // 대기 중일 땐 충돌 무시
                 render: { sprite: { texture: '' } } 
             });
             getCircularTexture(index, radius, (t) => { fruit.render.sprite.texture = t; });
@@ -87,37 +86,36 @@
             return fruit;
         }
 
-        // --- 드래그 조준 로직 ---
+        // 조준 제어
         window.addEventListener("mousedown", (e) => {
             if (isMouseDown) return;
-            isMouseDown = true;
             const rect = render.canvas.getBoundingClientRect();
             const x = Math.max(30, Math.min(370, e.clientX - rect.left));
-            currentFruit = addFruit(x, 50, nextFruitIndex, true); // 정적(Static) 상태로 생성
+            if (x < 0 || x > 400) return; // 캔버스 밖 클릭 무시
+            
+            isMouseDown = true;
+            currentFruit = addFruit(x, 50, nextFruitIndex, true);
         });
 
         window.addEventListener("mousemove", (e) => {
             if (isMouseDown && currentFruit) {
                 const rect = render.canvas.getBoundingClientRect();
                 const x = Math.max(30, Math.min(370, e.clientX - rect.left));
-                Matter.Body.setPosition(currentFruit, { x: x, y: 50 });
+                Body.setPosition(currentFruit, { x: x, y: 50 });
             }
         });
 
         window.addEventListener("mouseup", (e) => {
             if (isMouseDown && currentFruit) {
                 isMouseDown = false;
-                // 물리 엔진 적용 (중력 받게 함)
-                Matter.Body.setStatic(currentFruit, false);
-                currentFruit.collisionFilter = { group: 0, mask: 0xFFFFFFFF };
-                
+                Body.setStatic(currentFruit, false);
                 currentFruit = null;
                 nextFruitIndex = Math.floor(Math.random() * 4);
                 updateNextPreview();
             }
         });
 
-        // 합치기 로직
+        // 합치기
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
