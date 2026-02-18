@@ -2,15 +2,15 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>싱박게임 - 스코어 업그레이드 🍉</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>싱박게임 - PC & 모바일 통합 🍉</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; }
-        #score { position: absolute; top: 20px; left: 20px; font-size: 35px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 2px 2px white; pointer-events: none; }
-        #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; pointer-events: none; }
-        #next-label { font-size: 14px; font-weight: bold; color: #ff4757; margin-bottom: 5px; }
-        #next-preview { width: 60px; height: 60px; background-size: cover; background-position: center; border-radius: 50%; margin: 0 auto; }
-        canvas { border: 4px solid #ffb7b7; border-radius: 10px; background-color: white; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; user-select: none; touch-action: none; }
+        #score { position: absolute; top: 20px; left: 20px; font-size: 30px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 2px 2px white; pointer-events: none; }
+        #next-container { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.8); padding: 8px; border-radius: 15px; border: 3px solid #ffb7b7; text-align: center; z-index: 10; pointer-events: none; }
+        #next-label { font-size: 12px; font-weight: bold; color: #ff4757; margin-bottom: 3px; }
+        #next-preview { width: 50px; height: 50px; background-size: cover; background-position: center; border-radius: 50%; margin: 0 auto; }
+        canvas { border: 4px solid #ffb7b7; border-radius: 10px; background-color: white; max-width: 95vw; max-height: 80vh; }
     </style>
 </head>
 <body>
@@ -29,6 +29,7 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
+        // 물리 환경 설정 (바닥 보강)
         const ground = Bodies.rectangle(200, 650, 600, 100, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const leftWall = Bodies.rectangle(-45, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const rightWall = Bodies.rectangle(445, 300, 100, 800, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
@@ -37,14 +38,11 @@
         let score = 0;
         let nextFruitIndex = Math.floor(Math.random() * 4);
         let currentFruit = null;
-        let isMouseDown = false;
+        let isInputActive = false;
 
-        const FRUITS = [
-            { r: 25 }, { r: 35 }, { r: 45 }, { r: 55 }, { r: 70 }, 
-            { r: 85 }, { r: 100 }, { r: 115 }, { r: 130 }, { r: 145 }, { r: 160 }
-        ];
-
+        const FRUITS = [{ r: 25 }, { r: 35 }, { r: 45 }, { r: 55 }, { r: 70 }, { r: 85 }, { r: 100 }, { r: 115 }, { r: 130 }, { r: 145 }, { r: 160 }];
         const textureCache = {};
+
         function updateNextPreview() {
             const fileName = `싱박${(nextFruitIndex + 1).toString().padStart(2, '0')}.png`;
             document.getElementById('next-preview').style.backgroundImage = `url(${fileName})`;
@@ -71,12 +69,8 @@
         function addFruit(x, y, index, isStatic = false) {
             if (index >= 11) return null;
             const radius = FRUITS[index].r;
-
             const fruit = Bodies.circle(x, y, radius, {
-                index: index,
-                isStatic: isStatic,
-                restitution: 0.2,
-                friction: 0.1,
+                index: index, isStatic: isStatic, restitution: 0.2, friction: 0.1,
                 render: { sprite: { texture: '' } } 
             });
             getCircularTexture(index, radius, (t) => { fruit.render.sprite.texture = t; });
@@ -84,38 +78,52 @@
             return fruit;
         }
 
-        window.addEventListener("mousedown", (e) => {
-            if (isMouseDown) return;
+        // 입력 처리 (마우스 & 터치 공용)
+        function startInput(clientX) {
+            if (isInputActive) return;
             const rect = render.canvas.getBoundingClientRect();
-            const x = Math.max(30, Math.min(370, e.clientX - rect.left));
-            if (x < 0 || x > 400) return;
-            isMouseDown = true;
+            const x = Math.max(30, Math.min(370, (clientX - rect.left) * (400 / rect.width)));
+            isInputActive = true;
             currentFruit = addFruit(x, 50, nextFruitIndex, true);
-        });
+        }
 
-        window.addEventListener("mousemove", (e) => {
-            if (isMouseDown && currentFruit) {
+        function moveInput(clientX) {
+            if (isInputActive && currentFruit) {
                 const rect = render.canvas.getBoundingClientRect();
-                const x = Math.max(30, Math.min(370, e.clientX - rect.left));
+                const x = Math.max(30, Math.min(370, (clientX - rect.left) * (400 / rect.width)));
                 Body.setPosition(currentFruit, { x: x, y: 50 });
             }
-        });
+        }
 
-        window.addEventListener("mouseup", (e) => {
-            if (isMouseDown && currentFruit) {
-                isMouseDown = false;
+        function endInput() {
+            if (isInputActive && currentFruit) {
+                isInputActive = false;
                 Body.setStatic(currentFruit, false);
-                
-                // [수정] 마우스를 뗄 때(떨어뜨릴 때) 기본 10점 추가!
-                score += 10;
+                score += 10; // 투하 시 10점 상승
                 document.getElementById("score").innerText = score;
-                
                 currentFruit = null;
                 nextFruitIndex = Math.floor(Math.random() * 4);
                 updateNextPreview();
             }
-        });
+        }
 
+        // 마우스 리스너
+        window.addEventListener("mousedown", (e) => startInput(e.clientX));
+        window.addEventListener("mousemove", (e) => moveInput(e.clientX));
+        window.addEventListener("mouseup", endInput);
+
+        // 터치 리스너
+        window.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            startInput(e.touches[0].clientX);
+        }, { passive: false });
+        window.addEventListener("touchmove", (e) => {
+            e.preventDefault();
+            moveInput(e.touches[0].clientX);
+        }, { passive: false });
+        window.addEventListener("touchend", endInput);
+
+        // 합치기 판정
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
@@ -127,9 +135,7 @@
                     if (Composite.allBodies(engine.world).includes(bodyA) && Composite.allBodies(engine.world).includes(bodyB)) {
                         Composite.remove(engine.world, [bodyA, bodyB]);
                         addFruit(newX, newY, index + 1, false);
-                        
-                        // [수정] 합치기 보너스 점수: 다음 단계 번호에 따라 팍팍!
-                        score += (index + 1) * 20; 
+                        score += (index + 1) * 20; // 합치기 보너스 점수
                         document.getElementById("score").innerText = score;
                     }
                 }
