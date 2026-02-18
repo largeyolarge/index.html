@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>싱박게임 - 🍉</title>
+    <title>싱박게임 - 최종 진화형 🍉</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        #score { position: absolute; top: 20px; font-size: 40px; font-weight: bold; color: #ff4757; z-index: 10; pointer-events: none; text-shadow: 2px 2px white; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #fff5f5; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Arial', sans-serif; }
+        #score { position: absolute; top: 20px; font-size: 40px; font-weight: bold; color: #ff4757; z-index: 10; text-shadow: 2px 2px white; }
     </style>
 </head>
 <body>
@@ -21,43 +21,90 @@
             options: { width: 400, height: 600, wireframes: false, background: '#ffffff' }
         });
 
+        // 벽 설정
         const ground = Bodies.rectangle(200, 590, 400, 20, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const leftWall = Bodies.rectangle(5, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         const rightWall = Bodies.rectangle(395, 300, 10, 600, { isStatic: true, render: { fillStyle: '#ffb7b7' } });
         Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         let score = 0;
+        // 과일 데이터 (반지름과 점수)
         const FRUITS = [
-            { radius: 20, score: 2, scale: 0.15 }, // 싱박01.png
-            { radius: 30, score: 4, scale: 0.22 }, // 싱박02.png
-            { radius: 45, score: 8, scale: 0.3 },  // 싱박03.png
-            { radius: 60, score: 16, scale: 0.4 }  // 싱박04.png...
+            { r: 25, score: 2 }, { r: 35, score: 4 }, { r: 45, score: 8 }, 
+            { r: 55, score: 16 }, { r: 70, score: 32 }, { r: 85, score: 64 }, 
+            { r: 100, score: 128 }, { r: 115, score: 256 }, { r: 130, score: 512 }, 
+            { r: 145, score: 1024 }, { r: 160, score: 2048 }
         ];
 
-        window.addEventListener("mousedown", (e) => {
-            const x = e.clientX - window.innerWidth / 2 + 200;
-            addFruit(x, 50, 0); 
-        });
+        // 이미지 캐싱 및 동그랗게 깎는 함수
+        const circleTextureCache = {};
+
+        function createCircleTexture(index, radius) {
+            const fileName = `싱박${(index + 1).toString().padStart(2, '0')}.png`;
+            const cacheKey = `${fileName}-${radius}`;
+            if (circleTextureCache[cacheKey]) return circleTextureCache[cacheKey];
+
+            const canvas = document.createElement('canvas');
+            const size = radius * 2;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            const img = new Image();
+            img.src = fileName;
+            img.onload = () => {
+                ctx.beginPath();
+                ctx.arc(radius, radius, radius, 0, Math.PI * 2);
+                ctx.clip();
+                // 이미지를 원형 캔버스에 꽉 채워서 그리기
+                ctx.drawImage(img, 0, 0, size, size);
+                circleTextureCache[cacheKey] = canvas.toDataURL();
+            };
+            return fileName; 
+        }
 
         function addFruit(x, y, index) {
             if (index >= 11) return;
-            // 파일 이름을 '싱박01', '싱박02' 형식으로 맞춰주는 부분
-            const fileName = `싱박${(index + 1).toString().padStart(2, '0')}.png`;
+            const radius = FRUITS[index].r;
             
-            const fruit = Bodies.circle(x, y, FRUITS[index]?.radius || 20, {
+            const fruit = Bodies.circle(x, y, radius, {
                 index: index,
                 restitution: 0.3,
-                render: { 
-                    sprite: { 
-                        texture: fileName, 
-                        xScale: FRUITS[index]?.scale || 0.2, 
-                        yScale: FRUITS[index]?.scale || 0.2 
-                    } 
+                friction: 0.1,
+                render: {
+                    sprite: {
+                        texture: createCircleTexture(index, radius),
+                        // 텍스처가 로드되기 전 기본 설정을 위해 1:1 스케일 유지
+                        xScale: 1,
+                        yScale: 1
+                    }
                 }
             });
+
+            // 이미지가 로드된 후 텍스처를 동그란 버전으로 교체하는 루틴
+            const checkLoad = setInterval(() => {
+                const fileName = `싱박${(index + 1).toString().padStart(2, '0')}.png`;
+                const cacheKey = `${fileName}-${radius}`;
+                if (circleTextureCache[cacheKey]) {
+                    fruit.render.sprite.texture = circleTextureCache[cacheKey];
+                    clearInterval(checkLoad);
+                }
+            }, 100);
+
             Composite.add(engine.world, fruit);
         }
 
+        // 클릭 이벤트: 0~3번(싱박01~04) 랜덤 생성
+        window.addEventListener("mousedown", (e) => {
+            const rect = render.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            if (x > 0 && x < 400) {
+                const randomIndex = Math.floor(Math.random() * 4); 
+                addFruit(x, 50, randomIndex);
+            }
+        });
+
+        // 합치기 판정
         Events.on(engine, "collisionStart", (event) => {
             event.pairs.forEach((collision) => {
                 if (collision.bodyA.index !== undefined && collision.bodyA.index === collision.bodyB.index) {
@@ -70,7 +117,7 @@
                     Composite.remove(engine.world, [collision.bodyA, collision.bodyB]);
                     addFruit(newX, newY, index + 1);
                     
-                    score += FRUITS[index]?.score || 10;
+                    score += FRUITS[index].score;
                     document.getElementById("score").innerText = score;
                 }
             });
